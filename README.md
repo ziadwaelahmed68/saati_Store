@@ -1,5 +1,7 @@
 # SAATI store
 
+
+
 frontend/  -> static files for S3 (index.html, style.css, app.js, config.js)
 backend/   -> Python (Flask) API with SQLite
 
