@@ -2,6 +2,8 @@ import json, os, secrets, sqlite3, time
 from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 from werkzeug.security import check_password_hash, generate_password_hash
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 DB_PATH = os.environ.get("DB_PATH", "saati.db")
 ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
@@ -10,6 +12,13 @@ FREE_SHIPPING_FROM, SHIPPING, PROMO_CODE, PROMO_RATE = 300, 9.99, "SAATI10", 0.1
 
 app = Flask(__name__)
 CORS(app, origins=ORIGINS)
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
 
 PRODUCTS = {p[0]: dict(id=p[0], name=p[1], type=p[2], price=p[3]) for p in [
     (1, "Orion", "smart", 249), (2, "Nova", "smart", 199), (3, "Pulse", "smart", 149),
@@ -86,6 +95,7 @@ def signup():
 
 
 @app.post("/api/signin")
+@limiter.limit("5 per minute")
 def signin():
     d = request.get_json(silent=True) or {}
     email = (d.get("email") or "").strip().lower()
