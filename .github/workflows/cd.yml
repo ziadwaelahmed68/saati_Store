@@ -7,7 +7,11 @@ on:
         description: 'Target Environment'
         required: true
         default: 'production'
-
+# إضافة الصلاحيات المطلوبة لـ OIDC
+permissions:
+  id-token: write   # مطلوب للتحقق عبر OIDC مع AWS
+  contents: read    # لقراءة الكود من المستودع
+  
 jobs:
   deploy-aws:
     name: Deploy Frontend to S3 & Backend to ECR
