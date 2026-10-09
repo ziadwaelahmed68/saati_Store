@@ -15,4 +15,4 @@ backend/   -> Python (Flask) API with SQLite
 3. Enable static website hosting (index document: index.html). For HTTPS, put CloudFront in front of the bucket.
 4. Set ALLOWED_ORIGINS on the backend to your site's URL so the browser can call the API.
 
-Note: SQLite is fine for a start. For several servers, move to RDS (PostgreSQL).  
+22Note: SQLite is fine for a start. For several servers, move to RDS (PostgreSQL).  
