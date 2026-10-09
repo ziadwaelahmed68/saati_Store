@@ -1,0 +1,13 @@
+# Python
+backend/__pycache__/
+backend/*.pyc
+backend/*.db
+
+# Environments & Keys
+.env
+*.pem
+.DS_Store
+
+# IDE & OS
+.vscode/
+.idea/
