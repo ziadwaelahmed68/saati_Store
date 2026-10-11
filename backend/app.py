@@ -4,11 +4,13 @@ from flask_cors import CORS
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+import boto3
 # إعدادات AWS Cognito اللي طلعناها
 COGNITO_USER_POOL_ID = "eu-central-1_61kHuKfU3"
 COGNITO_CLIENT_ID = "6njag5ke4ps7sar3ecp31r1h4v"
 AWS_REGION = "eu-central-1"
 cognito_client = boto3.client('cognito-idp', region_name=AWS_REGION)
+
 
 ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
 TOKEN_TTL = 7 * 24 * 3600
