@@ -4,6 +4,11 @@ from flask_cors import CORS
 from werkzeug.security import check_password_hash, generate_password_hash
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+# إعدادات AWS Cognito اللي طلعناها
+COGNITO_USER_POOL_ID = "eu-central-1_61kHuKfU3"
+COGNITO_CLIENT_ID = "6njag5ke4ps7sar3ecp31r1h4v"
+AWS_REGION = "eu-central-1"
+cognito_client = boto3.client('cognito-idp', region_name=AWS_REGION)
 
 ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
 TOKEN_TTL = 7 * 24 * 3600
@@ -66,10 +71,15 @@ def signup():
     name, email, pw = (d.get("name") or "").strip(), (d.get("email") or "").strip().lower(), d.get("password") or ""
     if not name or "@" not in email or len(pw) < 6:
         return err("Enter your name, a valid email and a password of 6+ characters.")
-    if email in USERS:
-        return err("That email already has an account. Sign in instead.", 409)
-    
-    USERS[email] = {"name": name, "pw": generate_password_hash(pw)}
+    try:
+        cognito_client.sign_up(
+            ClientId=COGNITO_CLIENT_ID,
+            Username=email,
+            Password=pw,
+            UserAttributes=[{'Name': 'name', 'Value': name}]
+        )
+    except Exception as e:
+        return err(str(e), 400)
     return jsonify(token=new_session(email), name=name)
 
 
@@ -78,10 +88,22 @@ def signup():
 def signin():
     d = request.get_json(silent=True) or {}
     email = (d.get("email") or "").strip().lower()
-    u = USERS.get(email)
-    if not u or not check_password_hash(u["pw"], d.get("password") or ""):
+    pw = d.get("password") or ""
+    
+    try:
+        # التحقق من البيانات عبر AWS Cognito
+        response = cognito_client.initiate_auth(
+            ClientId=COGNITO_CLIENT_ID,
+            AuthFlow='USER_PASSWORD_AUTH',
+            AuthParameters={
+                'USERNAME': email,
+                'PASSWORD': pw
+            }
+        )
+    except Exception:
         return err("Email or password is incorrect.", 401)
-    return jsonify(token=new_session(email), name=u["name"])
+        
+    return jsonify(token=new_session(email), name=email.split('@')[0])
 
 
 @app.post("/api/checkout")
