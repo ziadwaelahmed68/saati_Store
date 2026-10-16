@@ -18,10 +18,16 @@ jobs:
       - name: 1. Checkout Production Code
         uses: actions/checkout@v4
 
+      # تحويل اسم المستودع إلى حروف صغيرة (lowercase) عشان Docker ما يرفضه
+      - name: Set lowercase repository name
+        id: repo-LC
+        run: |
+          echo "repo=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
+
       # الشرط 1: IAM roles for pipelines (الاتصال بـ AWS عبر OIDC)
       - name: 2. Configure AWS Credentials via IAM Role
         uses: aws-actions/configure-aws-credentials@v4
-        continue-on-error: true # حتى لا يتوقف المسار لو لم تكن قد ربطت حساب AWS بعد
+        continue-on-error: true
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN || 'arn:aws:iam::123456789012:role/GitHubActions-CD-Role' }}
           aws-region: us-east-1
@@ -38,10 +44,10 @@ jobs:
         id: build-image
         uses: docker/build-push-action@v5
         with:
-          context: ./frontend
+          context: .
           file: ./frontend/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}/saati-frontend:latest
+          tags: ghcr.io/${{ steps.repo-LC.outputs.repo }}/saati-frontend:latest
 
       # الشرط 2: Artifact signing (توقيع الـ Docker Image باستخدام Cosign)
       - name: 5. Install Cosign for Artifact Signing
@@ -49,7 +55,7 @@ jobs:
 
       - name: 6. Sign Docker Artifact (Keyless OIDC Signing)
         run: |
-          cosign sign --yes ghcr.io/${{ github.repository }}/saati-frontend@${{ steps.build-image.outputs.digest }}
+          cosign sign --yes ghcr.io/${{ steps.repo-LC.outputs.repo }}/saati-frontend@${{ steps.build-image.outputs.digest }}
 
       # تشغيل التطبيق محلياً داخل السيرفر لاختباره بـ DAST
       - name: 7. Start Application for DAST Scanning
