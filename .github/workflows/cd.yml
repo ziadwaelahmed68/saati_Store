@@ -58,8 +58,16 @@ jobs:
       # تشغيل حاوية الموقع التي بنيناها للتو لتكون جاهزة لفحص الـ DAST
       - name: 7. Start Application Container for DAST Scanning
         run: |
-          docker run -d -p 8080:80 --name saati_staging ${{ steps.build-image.outputs.image }}
-          sleep 5
+          # 1. تصحيح البورت ليكون 8080:8080 بدلاً من 8080:80
+          docker run -d -p 8080:8080 --name saati_staging ${{ steps.build-image.outputs.image }}
+          
+          # الانتظار قليلاً للتأكد من أن الحاوية بدأت بالعمل
+          sleep 10
+          
+          # 2. إعطاء صلاحيات الكتابة لمجلد المشروع حتى يتمكن ZAP من حفظ التقارير بدون Permission denied
+          chmod -R 777 ${{ github.workspace }}
+          
+          # التأكد من أن الموقع يعمل ويرد بنجاح
           curl -I http://localhost:8080 || true
 
       # الشرط 3: DAST & DAST results (OWASP ZAP)
