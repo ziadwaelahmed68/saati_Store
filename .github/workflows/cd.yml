@@ -11,42 +11,40 @@ permissions:
 
 jobs:
   build-sign-deploy-dast:
-    name: Build, Artifact Signing, IAM Role & DAST
+    name: Build, Artifact Signing, IAM Role, DAST & AWS Push
     runs-on: ubuntu-latest
 
     steps:
       - name: 1. Checkout Production Code
         uses: actions/checkout@v4
 
-      - name: Set lowercase repository name
-        id: repo-LC
-        run: |
-          echo "repo=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
-
       # الشرط 1: IAM roles for pipelines
       - name: 2. Configure AWS Credentials via IAM Role
         uses: aws-actions/configure-aws-credentials@v4
-        continue-on-error: true
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN || 'arn:aws:iam::123456789012:role/GitHubActions-CD-Role' }}
+          # تأكد من إضافة هذا الـ Secret في إعدادات مستودع جيتهاب
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-central-1
 
-      # تجهيز وبناء Docker Image للمشروع
-      - name: 3. Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      # --- الخطوات الجديدة الخاصة بـ AWS ---
+      - name: 3. Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: 4. Build and Push Frontend Docker Artifact
+      - name: 4. Build, tag, and push Docker image to Amazon ECR
         id: build-image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./frontend/Dockerfile
-          push: true
-          tags: ghcr.io/${{ steps.repo-LC.outputs.repo }}/saati-frontend:latest
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          # استبدل saati-frontend باسم الـ Repository الذي أنشأته في AWS ECR
+          ECR_REPOSITORY: saati-frontend 
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # بناء الصورة
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f ./frontend/Dockerfile .
+          # رفع الصورة إلى AWS ECR
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          # حفظ اسم الصورة لاستخدامه في خطوات التوقيع
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       # الشرط 2: Artifact signing (Cosign)
       - name: 5. Install Cosign for Artifact Signing
@@ -54,12 +52,13 @@ jobs:
 
       - name: 6. Sign Docker Artifact (Keyless OIDC Signing)
         run: |
-          cosign sign --yes ghcr.io/${{ steps.repo-LC.outputs.repo }}/saati-frontend@${{ steps.build-image.outputs.digest }}
+          # توقيع الصورة المرفوعة على AWS ECR
+          cosign sign --yes ${{ steps.build-image.outputs.image }}
 
       # تشغيل حاوية الموقع التي بنيناها للتو لتكون جاهزة لفحص الـ DAST
       - name: 7. Start Application Container for DAST Scanning
         run: |
-          docker run -d -p 8080:80 --name saati_staging ghcr.io/${{ steps.repo-LC.outputs.repo }}/saati-frontend:latest
+          docker run -d -p 8080:80 --name saati_staging ${{ steps.build-image.outputs.image }}
           sleep 5
           curl -I http://localhost:8080 || true
 
