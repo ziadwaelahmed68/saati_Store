@@ -18,13 +18,12 @@ jobs:
       - name: 1. Checkout Production Code
         uses: actions/checkout@v4
 
-      # تحويل اسم المستودع إلى حروف صغيرة (lowercase) عشان Docker ما يرفضه
       - name: Set lowercase repository name
         id: repo-LC
         run: |
           echo "repo=${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
 
-      # الشرط 1: IAM roles for pipelines (الاتصال بـ AWS عبر OIDC)
+      # الشرط 1: IAM roles for pipelines
       - name: 2. Configure AWS Credentials via IAM Role
         uses: aws-actions/configure-aws-credentials@v4
         continue-on-error: true
@@ -49,7 +48,7 @@ jobs:
           push: true
           tags: ghcr.io/${{ steps.repo-LC.outputs.repo }}/saati-frontend:latest
 
-      # الشرط 2: Artifact signing (توقيع الـ Docker Image باستخدام Cosign)
+      # الشرط 2: Artifact signing (Cosign)
       - name: 5. Install Cosign for Artifact Signing
         uses: sigstore/cosign-installer@v3.5.0
 
@@ -57,16 +56,19 @@ jobs:
         run: |
           cosign sign --yes ghcr.io/${{ steps.repo-LC.outputs.repo }}/saati-frontend@${{ steps.build-image.outputs.digest }}
 
-      # تشغيل التطبيق محلياً داخل السيرفر لاختباره بـ DAST
-      - name: 7. Start Application for DAST Scanning
+      # تشغيل حاوية الموقع التي بنيناها للتو لتكون جاهزة لفحص الـ DAST
+      - name: 7. Start Application Container for DAST Scanning
         run: |
-          pip install -r requirements.txt
-          nohup python app.py > app.log 2>&1 &
+          docker run -d -p 8080:80 --name saati_staging ghcr.io/${{ steps.repo-LC.outputs.repo }}/saati-frontend:latest
           sleep 5
+          curl -I http://localhost:8080 || true
 
-      # الشرط 3: DAST & DAST results (فحص التطبيق وهو يعمل بواسطة OWASP ZAP)
+      # الشرط 3: DAST & DAST results (OWASP ZAP)
       - name: 8. Run OWASP ZAP Baseline Scan (DAST)
         uses: zaproxy/action-baseline@v0.12.0
         with:
-          target: 'http://localhost:5000'
-          fail_action: false
+          target: 'http://localhost:8080'
+          docker_name: 'ghcr.io/zaproxy/zaproxy:stable'
+          cmd_options: '-a'
+          allow_issue_writing: false # يمنع الخطأ الناتج عن محاولة فتح Issue
+          fail_action: false          # يضمن خروج التقرير بنجاح باللون الأخضر
