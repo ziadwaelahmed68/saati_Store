@@ -3,11 +3,15 @@ name: Secure CD Pipeline (Main Branch)
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
   id-token: write # مطلوب لتشغيل AWS IAM Role (OIDC) ولتوقيع Cosign
+
+env:
+  AWS_REGION: eu-central-1
 
 jobs:
   build-sign-deploy-dast:
@@ -18,67 +22,81 @@ jobs:
       - name: 1. Checkout Production Code
         uses: actions/checkout@v4
 
-      # الشرط 1: IAM roles for pipelines
+      # الشرط 1: IAM roles for pipelines (OIDC)
       - name: 2. Configure AWS Credentials via IAM Role
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          # تأكد من إضافة هذا الـ Secret في إعدادات مستودع جيتهاب
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: eu-central-1
+          aws-region: ${{ env.AWS_REGION }}
 
-      # --- الخطوات الجديدة الخاصة بـ AWS ---
       - name: 3. Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: 4. Build, tag, and push Docker image to Amazon ECR
+      # الشرط 2: تهيئة Cosign قبل البناء والتوقيع
+      - name: 4. Install Cosign for Artifact Signing
+        uses: sigstore/cosign-installer@v3.5.0
+
+      # بناء ورفع وتوقيع الـ 5 خدمات كلها (Frontend + 4 Backend Microservices)
+      - name: 5. Build, Push & Sign All Services to Amazon ECR
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          # استبدل saati-frontend باسم الـ Repository الذي أنشأته في AWS ECR
-          ECR_REPOSITORY: saati-frontend 
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          # بناء الصورة
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f ./frontend/Dockerfile .
-          # رفع الصورة إلى AWS ECR
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          # حفظ اسم الصورة لاستخدامه في خطوات التوقيع
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          # قائمة الخدمات وملفات الـ Dockerfile الخاصة بها
+          SERVICES=(
+            "saati-frontend:./frontend/Dockerfile"
+            "saati-auth:./backend/services/auth/Dockerfile"
+            "saati-products:./backend/services/products/Dockerfile"
+            "saati-images:./backend/services/images/Dockerfile"
+            "saati-orders:./backend/services/orders/Dockerfile"
+          )
 
-      # الشرط 2: Artifact signing (Cosign)
-      - name: 5. Install Cosign for Artifact Signing
-        uses: sigstore/cosign-installer@v3.5.0
+          for entry in "${SERVICES[@]}"; do
+            REPO="${entry%%:*}"
+            DOCKERFILE="${entry#*:}"
 
-      - name: 6. Sign Docker Artifact (Keyless OIDC Signing)
+            echo "----------------------------------------"
+            echo "Processing $REPO ($DOCKERFILE)..."
+
+            # إنشاء المستودع في ECR تلقائياً لو مش موجود
+            aws ecr describe-repositories --repository-names "$REPO" --region "$AWS_REGION" >/dev/null 2>&1 || \
+              aws ecr create-repository --repository-name "$REPO" --image-scanning-configuration scanOnPush=true --region "$AWS_REGION"
+
+            FULL_IMAGE="$ECR_REGISTRY/$REPO:$IMAGE_TAG"
+            LATEST_IMAGE="$ECR_REGISTRY/$REPO:latest"
+
+            # بناء ورفع الصورة
+            docker build -t "$FULL_IMAGE" -t "$LATEST_IMAGE" -f "$DOCKERFILE" .
+            docker push "$FULL_IMAGE"
+            docker push "$LATEST_IMAGE"
+
+            # استخراج الـ Digest وتوقيع الصورة بـ Cosign (Keyless OIDC)
+            DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$FULL_IMAGE")
+            cosign sign --yes "$DIGEST"
+          done
+
+          # حفظ اسم صورة الفرونت إند لاستخدامها في فحص الـ DAST
+          echo "frontend_image=$ECR_REGISTRY/saati-frontend:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      # تشغيل حاوية الموقع لفحص الـ DAST
+      - name: 6. Start Application Container for DAST Scanning
         run: |
-          # توقيع الصورة المرفوعة على AWS ECR
-          cosign sign --yes ${{ steps.build-image.outputs.image }}
-
-     # تشغيل حاوية الموقع التي بنيناها للتو لتكون جاهزة لفحص الـ DAST
-      - name: 7. Start Application Container for DAST Scanning
-        run: |
-          # إضافة --add-host لمنع Nginx من الانهيار بسبب عدم وجود حاويات الباك إند
           docker run -d -p 8080:8080 \
             --add-host auth:127.0.0.1 \
             --add-host products:127.0.0.1 \
             --add-host images:127.0.0.1 \
             --add-host orders:127.0.0.1 \
-            --name saati_staging ${{ steps.build-image.outputs.image }}
-          
-          # الانتظار قليلاً للتأكد من أن الحاوية بدأت بالعمل
+            --name saati_staging ${{ steps.build-image.outputs.frontend_image }}
+
           sleep 5
-          
-          # إعطاء صلاحيات الكتابة لمجلد المشروع حتى يتمكن ZAP من حفظ التقارير
           chmod -R 777 ${{ github.workspace }}
-          
-          # عرض سجلات الحاوية (Logs) لاكتشاف أي خطأ في حالة سقوطها
           docker logs saati_staging
-          
-          # اختبار الاتصال (بدون || true عشان لو وقعت نعرف فوراً في الخطوة دي)
           curl -I http://localhost:8080
+
       # الشرط 3: DAST & DAST results (OWASP ZAP)
-      - name: 8. Run OWASP ZAP Baseline Scan (DAST)
+      - name: 7. Run OWASP ZAP Baseline Scan (DAST)
         uses: zaproxy/action-baseline@v0.14.0
         with:
           target: 'http://localhost:8080'
