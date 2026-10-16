@@ -3,7 +3,6 @@ import os
 from datetime import datetime, timezone
 from flask import Flask, g, jsonify, request
 from flask_cors import CORS
-from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -17,13 +16,6 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app, origins=Config.ALLOWED_ORIGINS)
-
-limiter = Limiter(
-    get_remote_address,
-    app=app,
-    default_limits=["200 per day", "60 per hour"],
-    storage_uri=os.environ.get("RATELIMIT_STORAGE_URI", "memory://"),
-)
 
 
 def _users_table():
@@ -64,7 +56,6 @@ def health():
 
 
 @app.post("/api/signup")
-@limiter.limit("10 per minute")
 def signup():
     d = request.get_json(silent=True) or {}
     name = (d.get("name") or "").strip()
@@ -119,7 +110,6 @@ def signup():
 
 
 @app.post("/api/signin")
-@limiter.limit("10 per minute")
 def signin():
     d = request.get_json(silent=True) or {}
     email = (d.get("email") or "").strip().lower()
