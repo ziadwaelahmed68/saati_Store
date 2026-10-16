@@ -1,0 +1,108 @@
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:8000 >/dev/null || exit 0"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  db-init:
+    build:
+      context: .
+      dockerfile: backend/services/products/Dockerfile
+    user: root
+    volumes:
+      - ./backend/scripts:/app/scripts:ro
+    environment:
+      AWS_REGION: ${AWS_REGION:-eu-central-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-local}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-local}
+      DYNAMODB_ENDPOINT_URL: http://dynamodb-local:8000
+      PRODUCTS_TABLE: ${PRODUCTS_TABLE:-saati_products}
+      ORDERS_TABLE: ${ORDERS_TABLE:-saati_orders}
+      USERS_TABLE: ${USERS_TABLE:-saati_users}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+    depends_on:
+      dynamodb-local:
+        condition: service_healthy
+    command: ["python", "/app/scripts/migrate_dynamodb.py"]
+
+  auth:
+    build:
+      context: .
+      dockerfile: backend/services/auth/Dockerfile
+    environment:
+      PORT: 8081
+      AWS_REGION: ${AWS_REGION:-eu-central-1}
+      DYNAMODB_ENDPOINT_URL: ${DYNAMODB_ENDPOINT_URL:-http://dynamodb-local:8000}
+      USERS_TABLE: ${USERS_TABLE:-saati_users}
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-dynamodb}
+      COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID:-}
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID:-}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-replace-with-strong-secret-in-env}
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+
+  products:
+    build:
+      context: .
+      dockerfile: backend/services/products/Dockerfile
+    environment:
+      PORT: 8082
+      AWS_REGION: ${AWS_REGION:-eu-central-1}
+      DYNAMODB_ENDPOINT_URL: ${DYNAMODB_ENDPOINT_URL:-http://dynamodb-local:8000}
+      PRODUCTS_TABLE: ${PRODUCTS_TABLE:-saati_products}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
+      CLOUDFRONT_DOMAIN: ${CLOUDFRONT_DOMAIN:-}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-replace-with-strong-secret-in-env}
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+
+  images:
+    build:
+      context: .
+      dockerfile: backend/services/images/Dockerfile
+    environment:
+      PORT: 8083
+      AWS_REGION: ${AWS_REGION:-eu-central-1}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
+      CLOUDFRONT_DOMAIN: ${CLOUDFRONT_DOMAIN:-}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-replace-with-strong-secret-in-env}
+
+  orders:
+    build:
+      context: .
+      dockerfile: backend/services/orders/Dockerfile
+    environment:
+      PORT: 8084
+      AWS_REGION: ${AWS_REGION:-eu-central-1}
+      DYNAMODB_ENDPOINT_URL: ${DYNAMODB_ENDPOINT_URL:-http://dynamodb-local:8000}
+      PRODUCTS_TABLE: ${PRODUCTS_TABLE:-saati_products}
+      ORDERS_TABLE: ${ORDERS_TABLE:-saati_orders}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-replace-with-strong-secret-in-env}
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      auth:
+        condition: service_healthy
+      products:
+        condition: service_healthy
+      images:
+        condition: service_healthy
+      orders:
+        condition: service_healthy

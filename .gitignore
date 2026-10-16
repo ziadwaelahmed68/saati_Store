@@ -1,0 +1,37 @@
+# Environment & Secrets (مهم جداً عشان Gitleaks ميرفضش الـ Push)
+.env
+.env.*
+!.env.example
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+ENV/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Docker local volumes / data
+data/
+dynamodb_data/
+
+# IDEs & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Backup or duplicate downloaded files
+* (1)*
+*.bak
