@@ -55,21 +55,28 @@ jobs:
           # توقيع الصورة المرفوعة على AWS ECR
           cosign sign --yes ${{ steps.build-image.outputs.image }}
 
-      # تشغيل حاوية الموقع التي بنيناها للتو لتكون جاهزة لفحص الـ DAST
+     # تشغيل حاوية الموقع التي بنيناها للتو لتكون جاهزة لفحص الـ DAST
       - name: 7. Start Application Container for DAST Scanning
         run: |
-          # 1. تصحيح البورت ليكون 8080:8080 بدلاً من 8080:80
-          docker run -d -p 8080:8080 --name saati_staging ${{ steps.build-image.outputs.image }}
+          # إضافة --add-host لمنع Nginx من الانهيار بسبب عدم وجود حاويات الباك إند
+          docker run -d -p 8080:8080 \
+            --add-host auth:127.0.0.1 \
+            --add-host products:127.0.0.1 \
+            --add-host images:127.0.0.1 \
+            --add-host orders:127.0.0.1 \
+            --name saati_staging ${{ steps.build-image.outputs.image }}
           
           # الانتظار قليلاً للتأكد من أن الحاوية بدأت بالعمل
-          sleep 10
+          sleep 5
           
-          # 2. إعطاء صلاحيات الكتابة لمجلد المشروع حتى يتمكن ZAP من حفظ التقارير بدون Permission denied
+          # إعطاء صلاحيات الكتابة لمجلد المشروع حتى يتمكن ZAP من حفظ التقارير
           chmod -R 777 ${{ github.workspace }}
           
-          # التأكد من أن الموقع يعمل ويرد بنجاح
-          curl -I http://localhost:8080 || true
-
+          # عرض سجلات الحاوية (Logs) لاكتشاف أي خطأ في حالة سقوطها
+          docker logs saati_staging
+          
+          # اختبار الاتصال (بدون || true عشان لو وقعت نعرف فوراً في الخطوة دي)
+          curl -I http://localhost:8080
       # الشرط 3: DAST & DAST results (OWASP ZAP)
       - name: 8. Run OWASP ZAP Baseline Scan (DAST)
         uses: zaproxy/action-baseline@v0.12.0
