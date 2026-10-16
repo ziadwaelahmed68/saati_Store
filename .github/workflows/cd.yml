@@ -12,7 +12,9 @@ permissions:
 
 env:
   AWS_REGION: eu-central-1
-
+  S3_BUCKET: ${{ vars.S3_FRONTEND_BUCKET }}
+  CLOUDFRONT_DIST_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+  
 jobs:
   build-sign-deploy-dast:
     name: Build, Artifact Signing, IAM Role, DAST & AWS Push
@@ -29,74 +31,94 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # --- الخطوة 3: تسجيل الدخول إلى Amazon ECR ---
       - name: 3. Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # الشرط 2: تهيئة Cosign قبل البناء والتوقيع
+      # الشرط 2: Artifact signing (Cosign)
       - name: 4. Install Cosign for Artifact Signing
         uses: sigstore/cosign-installer@v3.5.0
 
-      # بناء ورفع وتوقيع الـ 5 خدمات كلها (Frontend + 4 Backend Microservices)
-      - name: 5. Build, Push & Sign All Services to Amazon ECR
-        id: build-image
+      # --- الخطوة 5: بناء، رفع، وتوقيع خدمات الباك إند الأربعة على ECR ---
+      - name: 5. Build, Push & Sign Backend Services to Amazon ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          # قائمة الخدمات وملفات الـ Dockerfile الخاصة بها
-          SERVICES=(
-            "saati-frontend:./frontend/Dockerfile"
+          BACKEND_SERVICES=(
             "saati-auth:./backend/services/auth/Dockerfile"
             "saati-products:./backend/services/products/Dockerfile"
             "saati-images:./backend/services/images/Dockerfile"
             "saati-orders:./backend/services/orders/Dockerfile"
           )
 
-          for entry in "${SERVICES[@]}"; do
+          for entry in "${BACKEND_SERVICES[@]}"; do
             REPO="${entry%%:*}"
             DOCKERFILE="${entry#*:}"
 
             echo "----------------------------------------"
-            echo "Processing $REPO ($DOCKERFILE)..."
-
-            # إنشاء المستودع في ECR تلقائياً لو مش موجود
-            aws ecr describe-repositories --repository-names "$REPO" --region "$AWS_REGION" >/dev/null 2>&1 || \
-              aws ecr create-repository --repository-name "$REPO" --image-scanning-configuration scanOnPush=true --region "$AWS_REGION"
+            echo "Processing backend service: $REPO"
 
             FULL_IMAGE="$ECR_REGISTRY/$REPO:$IMAGE_TAG"
             LATEST_IMAGE="$ECR_REGISTRY/$REPO:latest"
 
-            # بناء ورفع الصورة
+            # بناء الصورة ورفعها
             docker build -t "$FULL_IMAGE" -t "$LATEST_IMAGE" -f "$DOCKERFILE" .
             docker push "$FULL_IMAGE"
             docker push "$LATEST_IMAGE"
 
-            # استخراج الـ Digest وتوقيع الصورة بـ Cosign (Keyless OIDC)
+            # توقيع الصورة بـ Cosign
             DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$FULL_IMAGE")
             cosign sign --yes "$DIGEST"
           done
 
-          # حفظ اسم صورة الفرونت إند لاستخدامها في فحص الـ DAST
-          echo "frontend_image=$ECR_REGISTRY/saati-frontend:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-      # تشغيل حاوية الموقع لفحص الـ DAST
-      - name: 6. Start Application Container for DAST Scanning
+      # --- الخطوة 6: رفع ملفات الفرونت إند مباشرة إلى S3 (بدون كونتير) ---
+      - name: 6. Deploy Frontend Static Files to Amazon S3
         run: |
+          echo "Syncing frontend files to s3://$S3_BUCKET..."
+          aws s3 sync . s3://$S3_BUCKET \
+            --delete \
+            --exclude "*" \
+            --include "index.html" \
+            --include "style.css" \
+            --include "app.js" \
+            --include "config.js"
+
+      # --- الخطوة 7: تفريغ كاش CloudFront (إن وجد) ---
+      - name: 7. Invalidate CloudFront Cache
+        run: |
+          if [ -n "$CLOUDFRONT_DIST_ID" ]; then
+            echo "Creating CloudFront invalidation for distribution $CLOUDFRONT_DIST_ID..."
+            aws cloudfront create-invalidation --distribution-id "$CLOUDFRONT_DIST_ID" --paths "/*"
+          else
+            echo "Skipping CloudFront invalidation (Distribution ID not provided)."
+          fi
+
+      # --- الخطوة 8: تشغيل حاوية الفرونت إند مؤقتاً محلياً في الجيت هاب لفحص الـ DAST ---
+      - name: 8. Start Application Container for DAST Scanning
+        run: |
+          # بناء مؤقت لصورة الفرونت إند خصيصاً لاختبارات الـ DAST
+          docker build -t saati-frontend-local:latest -f ./frontend/Dockerfile .
+
+          # تشغيل الحاوية
           docker run -d -p 8080:8080 \
             --add-host auth:127.0.0.1 \
             --add-host products:127.0.0.1 \
             --add-host images:127.0.0.1 \
             --add-host orders:127.0.0.1 \
-            --name saati_staging ${{ steps.build-image.outputs.frontend_image }}
-
+            --name saati_staging saati-frontend-local:latest
+          
+          # الانتظار قليلاً للتأكد من أن الحاوية بدأت بالعمل
           sleep 5
           chmod -R 777 ${{ github.workspace }}
           docker logs saati_staging
+          
+          # اختبار الاتصال
           curl -I http://localhost:8080
 
       # الشرط 3: DAST & DAST results (OWASP ZAP)
-      - name: 7. Run OWASP ZAP Baseline Scan (DAST)
+      - name: 9. Run OWASP ZAP Baseline Scan (DAST)
         uses: zaproxy/action-baseline@v0.14.0
         with:
           target: 'http://localhost:8080'
@@ -105,3 +127,15 @@ jobs:
           allow_issue_writing: false
           fail_action: false
           artifact_name: 'zap-report'
+
+      # --- الخطوة 10: تحديث خدمات الـ Backend على ECS لتسحب الصور الجديدة ---
+      - name: 10. Trigger ECS Rolling Deployment for Backend Services
+        run: |
+          CLUSTER="saati-store-cluster"
+          SERVICES=("saati-auth" "saati-products" "saati-images" "saati-orders")
+
+          for srv in "${SERVICES[@]}"; do
+            aws ecs describe-services --cluster "$CLUSTER" --services "$srv" >/dev/null 2>&1 && \
+              aws ecs update-service --cluster "$CLUSTER" --service "$srv" --force-new-deployment || \
+              echo "ECS service $srv not found or not active yet, skipping."
+          done
