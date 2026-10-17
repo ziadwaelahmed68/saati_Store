@@ -15,11 +15,9 @@ def _ddb_kwargs() -> dict:
         kwargs["endpoint_url"] = Config.DYNAMODB_ENDPOINT_URL
         kwargs["aws_access_key_id"] = os.environ.get("AWS_ACCESS_KEY_ID", "local")
         kwargs["aws_secret_access_key"] = os.environ.get("AWS_SECRET_ACCESS_KEY", "local")
-    elif not os.environ.get("AWS_ACCESS_KEY_ID") and not os.environ.get("AWS_PROFILE"):
-        # Fallback to local DynamoDB on port 8000 if no AWS credentials are configured
-        kwargs["endpoint_url"] = "http://localhost:8000"
-        kwargs["aws_access_key_id"] = "local"
-        kwargs["aws_secret_access_key"] = "local"
+    return kwargs
+
+
     return kwargs
 
 
