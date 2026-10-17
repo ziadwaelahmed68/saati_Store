@@ -150,16 +150,16 @@ def list_products():
         query_kwargs["ScanIndexForward"] = False
         resp = table.query(**query_kwargs)
     else:
-        # Uses StatusCreatedAtIndex GSI where entityType = 'PRODUCT'
-        query_kwargs["IndexName"] = "EntityCreatedAtIndex"
-        query_kwargs["KeyConditionExpression"] = Key("entityType").eq("PRODUCT")
-        query_kwargs["ScanIndexForward"] = False
         try:
-            resp = table.query(**query_kwargs)
+            resp = table.query(
+                IndexName="EntityCreatedAtIndex",
+                KeyConditionExpression=Key("entityType").eq("PRODUCT"),
+                ScanIndexForward=False,
+                **query_kwargs,
+            )
         except Exception:
-            # Fallback if legacy table has not added EntityCreatedAtIndex yet
+            # Fallback clean scan without query-only parameters
             resp = table.scan(**query_kwargs)
-
     items = [_serialize_product(i) for i in resp.get("Items", [])]
     if search_q:
         items = [
