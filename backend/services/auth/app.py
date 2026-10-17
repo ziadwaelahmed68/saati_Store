@@ -3,7 +3,6 @@ import os
 from datetime import datetime, timezone
 from flask import Flask, g, jsonify, request
 from flask_cors import CORS
-from flask_limiter.util import get_remote_address
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from shared.aws import get_cognito_client, get_dynamodb_resource
