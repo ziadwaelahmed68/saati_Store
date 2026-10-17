@@ -18,14 +18,6 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app, origins=Config.ALLOWED_ORIGINS)
 
-limiter = Limiter(
-    get_remote_address,
-    app=app,
-    default_limits=["200 per day", "60 per hour"],
-    storage_uri=os.environ.get("RATELIMIT_STORAGE_URI", "memory://"),
-)
-
-
 def _users_table():
     return get_dynamodb_resource().Table(Config.USERS_TABLE)
 
@@ -64,7 +56,6 @@ def health():
 
 
 @app.post("/api/signup")
-@limiter.limit("10 per minute")
 def signup():
     d = request.get_json(silent=True) or {}
     name = (d.get("name") or "").strip()
@@ -119,7 +110,6 @@ def signup():
 
 
 @app.post("/api/signin")
-@limiter.limit("10 per minute")
 def signin():
     d = request.get_json(silent=True) or {}
     email = (d.get("email") or "").strip().lower()
