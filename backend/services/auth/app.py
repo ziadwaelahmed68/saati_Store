@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app, origins=Config.ALLOWED_ORIGINS)
 
-
 def _users_table():
     return get_dynamodb_resource().Table(Config.USERS_TABLE)
 
