@@ -1,6 +1,9 @@
 # 🛒 SAATI WATCHES | Secure Cloud Architecture & DevSecOps Pipeline
 
-![Saati Watches Architecture Diagram](images/image_bf8580.png)
+
+
+
+![Saati Watches Architecture Diagram](https://github.com/user-attachments/assets/898469a5-1b86-4fee-8deb-0d3f78d3cd6e)
 
 A high-performance, secure, enterprise-grade e-commerce platform (**SAATI WATCHES**) designed for luxury timepiece retail. The platform is engineered using a decoupled **Microservices Architecture** on **Amazon Web Services (AWS)** in the **Frankfurt (`eu-central-1`)** region, incorporating modern **DevSecOps** practices, automated threat scanning, container signing, and zero-downtime rolling deployments.
 
@@ -10,7 +13,10 @@ A high-performance, secure, enterprise-grade e-commerce platform (**SAATI WATCHE
 
 The platform provides a responsive, fast, and modern web user interface serving customers globally via CloudFront edge locations.
 
-![Saati Watches Live Frontend Application](images/frontend_preview.png)
+![Saati Watches Live Frontend Application](https://github.com/user-attachments/assets/0744b3e2-831b-4d8b-944f-14c7b8d60439)
+![Saati Watches Live Frontend Application](https://github.com/user-attachments/assets/e997bc69-ceaa-49b7-9e3d-1eb3c7017514)
+
+
 
 ### 🌟 Key End-User Features:
 * **Interactive Catalog & Showcase:** Real-time watch catalog rendering powered by CloudFront CDN and cached S3 static assets (`index.html`, `app.js`, `style.css`).
@@ -34,10 +40,18 @@ The architecture follows strict AWS Well-Architected Framework guidelines, empha
 
 ## 🌐 2. VPC & Networking Infrastructure
 
-![VPC Setup](images/vpc.jpg)
-![Subnets](images/subnets.jpg)
-![Internet Gateway](images/igw.jpg)
-![Route Table](images/rt.jpg)
+![VPC Setup](https://github.com/user-attachments/assets/5a09b7fd-2486-4bfd-a373-2e42b42a2f16)
+
+
+![Subnets](https://github.com/user-attachments/assets/eaa76c4f-c135-4274-a5e4-86e4e2cf67cb)
+
+
+![Internet Gateway](https://github.com/user-attachments/assets/5f74571f-167e-43da-bc19-8418a625e412)
+
+
+![Route Table](https://github.com/user-attachments/assets/8bec0594-954a-4cbc-b5b8-dfdb4e6dd86d)
+
+
 
 The network perimeter is isolated inside a custom Virtual Private Cloud (**VPC**) configured across 3 Availability Zones (`eu-central-1a`, `eu-central-1b`, `eu-central-1c`) to achieve high availability and fault tolerance.
 
@@ -54,8 +68,12 @@ The network perimeter is isolated inside a custom Virtual Private Cloud (**VPC**
 
 ## ⚖️ 3. Load Balancing & Traffic Routing
 
-![Load Balancer](images/lb.jpg)
-![Target Groups](images/tg.jpg)
+![Load Balancer](https://github.com/user-attachments/assets/f18cacb7-3528-4ffd-97ab-33135fab9b26)
+
+
+![Target Groups](https://github.com/user-attachments/assets/34d0f939-4b88-413f-ada8-a4aadebacb95)
+
+
 
 Traffic distribution is managed by an **Application Load Balancer (`saati-alb`)**, listening on port `HTTP:80` and forwarding requests evenly (25% weight allocation) across specialized Target Groups.
 
@@ -70,9 +88,15 @@ Traffic distribution is managed by an **Application Load Balancer (`saati-alb`)*
 
 ## 🔄 4. CloudFront CDN & Path Behaviors
 
-![CloudFront General](images/cloudfront.jpg)
-![CloudFront Origins](images/origin%20cloud%20.jpg)
-![CloudFront Behaviors](images/behiver%20cloud%20.jpg)
+![CloudFront General](https://github.com/user-attachments/assets/b5bcc1bd-47a1-4771-bf82-14cc59c4bc40)
+
+
+![CloudFront Origins](https://github.com/user-attachments/assets/635a1fcd-ceca-4ce5-818c-f3f17c640140)
+
+
+![CloudFront Behaviors](https://github.com/user-attachments/assets/fbd16be1-9cdb-4fa0-a0b1-21b6ad589f17)
+
+
 
 The **`saati-store`** CloudFront Distribution (`d28bzg8arlab4ye.cloudfront.net`) operates with 3 origins protected by **Origin Access Control (OAC)** to enforce secure access.
 
@@ -85,13 +109,27 @@ The **`saati-store`** CloudFront Distribution (`d28bzg8arlab4ye.cloudfront.net`)
 
 ## 🐳 5. Containerized Microservices (ECS Fargate Cluster)
 
-![ECS Cluster](images/cluster.jpg)
-![Task Definitions](images/task%20definition.jpg)
-![Running Tasks](images/task%20cluster.jpg)
-![Auth Task](images/auth%20task.jpg)
-![Products Task](images/proudact%20task.jpg)
-![Images Task](images/images%20task.jpg)
-![Orders Task](images/task%20orders.jpg)
+![ECS Cluster](https://github.com/user-attachments/assets/c49104bf-702a-4396-89f0-4fccb57a625f)
+
+
+![Task Definitions](https://github.com/user-attachments/assets/3c2e3cda-bfaa-4f6e-a69c-4afad8554d72)
+
+
+![Running Tasks](https://github.com/user-attachments/assets/d9867df9-26b5-4dab-90c4-170716cc8c37)
+
+
+![Auth Task](https://github.com/user-attachments/assets/f7d8b476-8040-4fb1-8fc4-065b7468c74a)
+
+
+![Products Task](https://github.com/user-attachments/assets/0b0c4d40-9dae-458d-9d9a-de2dbcde8fd2)
+
+
+![Images Task](https://github.com/user-attachments/assets/ead8e50e-ea2f-4b05-9eac-8b73cc30408a)
+
+
+![Orders Task](https://github.com/user-attachments/assets/3d680c68-ebf9-4ca0-a03c-cb4aced19f5a)
+
+
 
 All backend microservices run serverlessly on **AWS Fargate** within the **`saati-store-cluster`**, isolated using `awsvpc` networking mode and running on `Linux/X86_64` architecture.
 
@@ -135,10 +173,13 @@ All backend microservices run serverlessly on **AWS Fargate** within the **`saat
 
 ## 🗄️ 6. Database Schema, S3 Buckets & Container Registry
 
-![S3 Frontend Bucket](images/s3%20bucket.jpg)
-![S3 Images Bucket](images/images.jpg)
-![ECR Repositories](images/esr.jpg)
-![DynamoDB Tables](images/dynamodb.jpg)
+![S3 Frontend Bucket](https://github.com/user-attachments/assets/1a40a421-8a21-487b-9bc6-f36b754de416)
+
+![S3 Images Bucket](https://github.com/user-attachments/assets/c3cf4ccc-ba16-4b4f-978f-ddf2fd4bd395)
+
+![DynamoDB Tables](https://github.com/user-attachments/assets/e97c1541-7110-42e8-a8c6-3b4e7ad9eea7)
+
+
 
 ### 📊 Amazon DynamoDB Schema:
 * **`saati_users`:** Key Schema: `email (S)` [Partition Key] – Stores user profiles & authorization metadata.
@@ -176,11 +217,29 @@ The deployment process implements a **Security-First (DevSecOps)** approach auto
 
 Below is the complete user journey from landing on the storefront to reviewing products and managing orders:
 
-![Saati Watches Store Front Page](images/frontend_home.png)
-![Saati Watches Product Details Page](images/frontend_product.png)
+
+
+![Saati Watches Product Details Page](https://github.com/user-attachments/assets/cf3ff2e4-603a-4c6f-ae67-7535f25466f8)
+
+
+![Saati Watches Product Details Page](https://github.com/user-attachments/assets/ad4f4f00-8528-4ad1-b62a-ae942c5cb3ba)
+
+![Saati Watches Product Details Page](https://github.com/user-attachments/assets/55540397-1171-4106-9371-85a361e9eb2b)
+
 
 ---
 
-## 👤 Project Author & Cloud Engineer
-* **Name:** Mohamed Mostafa Abdelgawad Khalifa
-* **Role:** Cloud Infrastructure & DevSecOps Engineer
+
+## 👥 Project Team & Cloud Engineering
+
+### Team Members
+
+1. **Mohamed Mostafa** 
+2. **Zeyad Wael**
+3. **Sameh Mohamed**
+4. **Ahmed Ehab**
+5. **Samia Samy**
+
+### Specialization
+Cloud Infrastructure, DevSecOps, and Cloud Security
+
