@@ -73,7 +73,8 @@ def signup():
                 ClientId=Config.COGNITO_CLIENT_ID,
                 Username=email,
                 Password=pw,
-                UserAttributes=[{"Name": "name", "Value": name}],
+                UserAttributes=[{"Name": "name", "Value": name},
+                                {"Name": "email", "Value": email}],
             )
         except Exception as exc:
             logger.info("Cognito signup rejected: %s", type(exc).__name__)
